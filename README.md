@@ -36,5 +36,6 @@ Also I am trying to learn Go.
 - pull all data for model through locally (e.g. to populate a duckdb database)
 
 Long term:
-- better interactions with LookML e.g. get difference between `view.lkml` fields and dbt model fields
+- better interactions with LookML e.g. get difference between `view.lkml` fields and dbt model fields (need to finish my lookml parser first) 
 - syncing descriptions
+- just grab the filepath for the view that implements the dbt model (easy) 
