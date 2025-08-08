@@ -17,7 +17,6 @@ var dryRunCmd = &cobra.Command{
 	Run:   dryRunRun,
 }
 
-// holds the filepath to a given model
 var modelMap map[string]string
 
 func dryRunRun(cmd *cobra.Command, args []string) {
@@ -26,22 +25,10 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	dbtDir := core.GetFolder(isVerbose)
 	isCompile, _ := cmd.Flags().GetBool("compile")
 
-	//var err error
-
-	//a, err := poetryRun("dbt --version", dbtDir)
-	//if err != nil {
-	//	log.Fatalf("Could not run %s in %s: %v", a, dbtDir, err)
-	//}
-
 	selectedModels, _ := cmd.Flags().GetStringSlice("select")
 	selectedModels = append(selectedModels, args...)
 
 	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
-
-	//err := core.ListModels(selectedModels, dbtDir)
-	//if err != nil {
-	//	log.Fatalf("Could not list models: %v", err)
-	//}
 
 	// TODO: add defer flags
 	if isCompile {
@@ -63,17 +50,17 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	core.LogVerbose(isVerbose, "%v", modelMap)
 
 	q, err := core.LoadSQL(selectedModels[0], dbtDir, isVerbose)
-	fmt.Println(q)
 	if err != nil {
 		log.Fatalf("Could not load SQL: %v", err)
 	}
 
-	//_, err = core.BqDryRun(q, isVerbose)
-
-	err = core.ListModels(selectedModels, dbtDir, isVerbose)
+	var bqout string
+	bqout, err = core.BqDryRun(q, isVerbose)
 	if err != nil {
-		log.Fatalf("Could not list models: %v", err)
+		log.Fatalf("BQ dry run failed: %v", err)
 	}
+
+	fmt.Println(bqout)
 
 	core.LogVerbose(isVerbose, "Done")
 }

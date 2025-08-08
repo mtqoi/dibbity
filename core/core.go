@@ -102,27 +102,27 @@ func CompileModel(m []string, dir string, b bool) error {
 func LoadSQL(m string, dir string, b bool) (string, error) {
 	//a := fmt.Sprintf("dbt run --select %s", m)
 
-	return `
-		SELECT *
+	return `SELECT *
 		FROM data-trustedwarehouse-p.commercial_da_reporting.rep_fct_bookings`, nil
 }
 
+// Q: is there a bq runner library already for Go?
 func BqDryRun(q string, b bool) (string, error) {
-	a := fmt.Sprintf("bq query --nouse_legacy_sql --dry_run --nouse_cache \"%s\"", q)
-
-	LogVerbose(b, "Running: %s", a)
+	//a := fmt.Sprintf("bq query --nouse_legacy_sql --dry_run --nouse_cache \"%s\"", q)
 
 	var out bytes.Buffer
 	var stderr bytes.Buffer
-	c := exec.Command(a)
-	if b {
-		c.Stdout = &out
-		c.Stderr = &stderr
-	}
+	//c := exec.Command("zsh", "-c", a)
+	c := exec.Command("bq", "query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", q)
+
+	LogVerbose(b, "Running: %s", c.String())
+
+	c.Stdout = &out
+	c.Stderr = &stderr
 
 	err := c.Run()
 	if err != nil {
-		log.Fatalf("Could not dry run query: %v", err)
+		return "", fmt.Errorf("could not dry run query: %v. Stderr: %s", err, stderr.String())
 	}
 
 	if b {
