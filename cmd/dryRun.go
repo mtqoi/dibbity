@@ -5,7 +5,7 @@ package cmd
 
 import (
 	"dibbity/core"
-	"fmt"
+	//"fmt"
 	"github.com/spf13/cobra"
 	"log"
 )
@@ -64,18 +64,16 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 
 	core.LogVerbose(isVerbose, "%v", modelMap)
 
-	q, err := core.LoadSQL(selectedModels[0], dbtDir, isVerbose)
+	q, err := core.LoadSQL(modelMap[selectedModels[0]], isVerbose)
 	if err != nil {
 		log.Fatalf("Error loading SQL: %v", err)
 	}
 
-	var bqout string
-	bqout, err = core.BqDryRun(q, isVerbose)
+	//var bqout string
+	_, err = core.BqDryRun(q, isVerbose)
 	if err != nil {
 		log.Fatalf("Error in BQ dry run: %v", err)
 	}
-
-	fmt.Println(bqout)
 
 	core.LogVerbose(isVerbose, "Done")
 }

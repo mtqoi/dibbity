@@ -98,11 +98,17 @@ func CompileModel(m []string, dir string, b bool) error {
 }
 
 // LoadSQL grabs the sql
-func LoadSQL(m string, dir string, b bool) (string, error) {
-	//a := fmt.Sprintf("dbt run --select %s", m)
+func LoadSQL(f string, b bool) (string, error) {
 
-	return `SELECT *
-		FROM data-trustedwarehouse-p.commercial_da_reporting.rep_fct_bookings`, nil
+	LogVerbose(b, "Loading SQL from %s", f)
+
+	var q []byte
+	q, err := os.ReadFile(f)
+	if err != nil {
+		return "", err
+	}
+
+	return string(q), nil
 }
 
 // Q: is there a bq runner library already for Go?
@@ -114,7 +120,7 @@ func BqDryRun(q string, b bool) (string, error) {
 	//c := exec.Command("zsh", "-c", a)
 	c := exec.Command("bq", "query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", q)
 
-	LogVerbose(b, "Running: %s", c.String())
+	//LogVerbose(b, "Running: %s", c.String())
 
 	c.Stdout = &out
 	c.Stderr = &stderr
