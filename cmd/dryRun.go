@@ -20,21 +20,36 @@ var dryRunCmd = &cobra.Command{
 var modelMap map[string]string
 
 func dryRunRun(cmd *cobra.Command, args []string) {
+	var err error
 
-	isVerbose, _ := cmd.Flags().GetBool("verbose")
-	dbtDir := core.GetFolder(isVerbose)
-	isCompile, _ := cmd.Flags().GetBool("compile")
+	isVerbose, err := cmd.Flags().GetBool("verbose")
+	if err != nil {
+		log.Fatalf("Error getting verbose flag: %v", err)
+	}
 
-	selectedModels, _ := cmd.Flags().GetStringSlice("select")
+	dbtDir, err := core.GetFolder(isVerbose)
+	if err != nil {
+		log.Fatalf("Error getting dbt directory: %v", err)
+	}
+
+	isCompile, err := cmd.Flags().GetBool("compile")
+	if err != nil {
+		log.Fatalf("Error getting compile flag: %v", err)
+	}
+
+	selectedModels, err := cmd.Flags().GetStringSlice("select")
+	if err != nil {
+		log.Fatalf("Error getting selected models: %v", err)
+	}
 	selectedModels = append(selectedModels, args...)
 
 	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
 
 	// TODO: add defer flags
 	if isCompile {
-		err := core.CompileModel(selectedModels, dbtDir, isVerbose)
+		err = core.CompileModel(selectedModels, dbtDir, isVerbose)
 		if err != nil {
-			log.Fatalf("Could not compile model: %v", err)
+			log.Fatalf("Error compiling model: %v", err)
 		}
 	}
 
@@ -42,7 +57,7 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	for _, model := range selectedModels {
 		fp, err := core.FindFilepath(model, dbtDir, "target", isVerbose)
 		if err != nil {
-			log.Fatalf("Could not find model: %v", err)
+			log.Fatalf("Error finding model %s: %v", model, err)
 		}
 		modelMap[model] = fp
 	}
@@ -51,13 +66,13 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 
 	q, err := core.LoadSQL(selectedModels[0], dbtDir, isVerbose)
 	if err != nil {
-		log.Fatalf("Could not load SQL: %v", err)
+		log.Fatalf("Error loading SQL: %v", err)
 	}
 
 	var bqout string
 	bqout, err = core.BqDryRun(q, isVerbose)
 	if err != nil {
-		log.Fatalf("BQ dry run failed: %v", err)
+		log.Fatalf("Error in BQ dry run: %v", err)
 	}
 
 	fmt.Println(bqout)
@@ -70,7 +85,7 @@ func init() {
 
 	dryRunCmd.Flags().StringSliceP("select", "s", []string{}, "Select models to run")
 	if err := dryRunCmd.MarkFlagRequired("select"); err != nil {
-		log.Fatalf("Could not mark --select flag as required: %v", err)
+		log.Fatalf("Error: could not mark --select flag as required: %v", err)
 	}
 
 	dryRunCmd.Flags().BoolP("compile", "c", false, "Compile new model")

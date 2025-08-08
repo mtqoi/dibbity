@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spf13/viper"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +25,7 @@ func LogVerbose(b bool, format string, a ...interface{}) {
 }
 
 // GetFolder retrieves the directory path specified by the "dbt-dir" configuration key, resolving "~" to the user's home directory.
-func GetFolder(b bool) string {
+func GetFolder(b bool) (string, error) {
 	dbtDir := viper.GetString("dbt-dir")
 
 	LogVerbose(b, "Using dbt folder: %s", dbtDir)
@@ -34,11 +33,11 @@ func GetFolder(b bool) string {
 	if strings.HasPrefix(dbtDir, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			log.Fatalf("Failed to get user home directory: %v", err)
+			return "", fmt.Errorf("failed to get user home directory: %w", err)
 		}
 		dbtDir = strings.Replace(dbtDir, "~", home, 1)
 	}
-	return dbtDir
+	return dbtDir, nil
 }
 
 // ListDir runs `ls -l` in directory path specified by the "dbt-dir" configuration key
@@ -70,9 +69,9 @@ func PoetryRun(args string, dir string, b bool) (string, error) {
 
 	err := c.Run()
 	if err != nil {
-		log.Fatalf("Could not activate Poetry in %s: %v", dir, err)
+		return "", fmt.Errorf("could not activate Poetry in %s: %w", dir, err)
 	}
-	return a, err
+	return a, nil
 }
 
 func ListModels(m []string, dir string, b bool) error {
@@ -81,7 +80,7 @@ func ListModels(m []string, dir string, b bool) error {
 
 	_, err := PoetryRun(a, dir, b)
 	if err != nil {
-		log.Fatalf("Could not list models: %v", err)
+		return fmt.Errorf("could not list models: %w", err)
 	}
 
 	return nil
@@ -93,7 +92,7 @@ func CompileModel(m []string, dir string, b bool) error {
 
 	_, err := PoetryRun(a, dir, b)
 	if err != nil {
-		log.Fatalf("Could not compile models %s: %v", strings.Join(m, " "), err)
+		return fmt.Errorf("could not compile models %s: %w", strings.Join(m, " "), err)
 	}
 	return nil
 }
