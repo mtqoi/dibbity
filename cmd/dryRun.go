@@ -17,6 +17,9 @@ var dryRunCmd = &cobra.Command{
 	Run:   dryRunRun,
 }
 
+// holds the filepath to a given model
+var modelMap map[string]string
+
 func dryRunRun(cmd *cobra.Command, args []string) {
 
 	isVerbose, _ := cmd.Flags().GetBool("verbose")
@@ -33,29 +36,46 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	selectedModels, _ := cmd.Flags().GetStringSlice("select")
 	selectedModels = append(selectedModels, args...)
 
-	if isVerbose {
-		fmt.Printf("Selected models: %v\n", selectedModels)
-	}
+	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
 
 	//err := core.ListModels(selectedModels, dbtDir)
 	//if err != nil {
 	//	log.Fatalf("Could not list models: %v", err)
 	//}
 
+	// TODO: add defer flags
 	if isCompile {
-		err := core.CompileModel(selectedModels[0], dbtDir, isVerbose)
+		err := core.CompileModel(selectedModels, dbtDir, isVerbose)
 		if err != nil {
 			log.Fatalf("Could not compile model: %v", err)
 		}
 	}
 
-	// TODO: ensure this can work for multiple models
-	_, err := core.FindFilepath(selectedModels[0], dbtDir, "target", isVerbose)
-	if err != nil {
-		log.Fatalf("Could not find model: %v", err)
+	modelMap = make(map[string]string)
+	for _, model := range selectedModels {
+		fp, err := core.FindFilepath(model, dbtDir, "target", isVerbose)
+		if err != nil {
+			log.Fatalf("Could not find model: %v", err)
+		}
+		modelMap[model] = fp
 	}
 
-	fmt.Println("Done")
+	core.LogVerbose(isVerbose, "%v", modelMap)
+
+	q, err := core.LoadSQL(selectedModels[0], dbtDir, isVerbose)
+	fmt.Println(q)
+	if err != nil {
+		log.Fatalf("Could not load SQL: %v", err)
+	}
+
+	//_, err = core.BqDryRun(q, isVerbose)
+
+	err = core.ListModels(selectedModels, dbtDir, isVerbose)
+	if err != nil {
+		log.Fatalf("Could not list models: %v", err)
+	}
+
+	core.LogVerbose(isVerbose, "Done")
 }
 
 func init() {

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/spf13/viper"
@@ -9,15 +10,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+func LogVerbose(b bool, format string, a ...interface{}) {
+	if !b {
+		return
+	}
+	const pinkColor = "\033[95m"
+	const resetColor = "\033[0m"
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	message := fmt.Sprintf(format, a...)
+	fmt.Printf("%s%s | %s%s\n", pinkColor, timestamp, message, resetColor)
+}
 
 // GetFolder retrieves the directory path specified by the "dbt-dir" configuration key, resolving "~" to the user's home directory.
 func GetFolder(b bool) string {
 	dbtDir := viper.GetString("dbt-dir")
 
-	if b {
-		fmt.Printf("Using dbt folder: %s\n", dbtDir)
-	}
+	LogVerbose(b, "Using dbt folder: %s", dbtDir)
 
 	if strings.HasPrefix(dbtDir, "~/") {
 		home, err := os.UserHomeDir()
@@ -44,18 +56,18 @@ func ListDir(dir string, b bool) error {
 // PoetryRun can run arbitrary commands in the directory path specified by the "dbt-dir" configuration key
 func PoetryRun(args string, dir string, b bool) (string, error) {
 	a := fmt.Sprintf("poetry run %s", args)
-	if b {
-		fmt.Printf("Running: %s\n", a)
-	}
+
+	LogVerbose(b, "Running: %s", a)
+
 	c := exec.Command("zsh", "-c", a)
 
 	c.Dir = dir
 
-	// TODO: ensure these only print if we have the verbose flag set
 	if b {
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
 	}
+
 	err := c.Run()
 	if err != nil {
 		log.Fatalf("Could not activate Poetry in %s: %v", dir, err)
@@ -63,23 +75,61 @@ func PoetryRun(args string, dir string, b bool) (string, error) {
 	return a, err
 }
 
-func ListModels(m []string, dir string) error {
-	for _, model := range m {
-		fmt.Println(model)
+func ListModels(m []string, dir string, b bool) error {
+
+	a := fmt.Sprintf("dbt ls --select %s %s", strings.Join(m, " "), "--resource-type model")
+
+	_, err := PoetryRun(a, dir, b)
+	if err != nil {
+		log.Fatalf("Could not list models: %v", err)
 	}
 
 	return nil
 }
 
-func CompileModel(modelName string, dir string, b bool) error {
+func CompileModel(m []string, dir string, b bool) error {
 
-	a := fmt.Sprintf("dbt compile --select %s", modelName)
+	a := fmt.Sprintf("dbt compile --select %s", strings.Join(m, " "))
 
 	_, err := PoetryRun(a, dir, b)
 	if err != nil {
-		log.Fatalf("Could not compile model %s: %v", modelName, err)
+		log.Fatalf("Could not compile models %s: %v", strings.Join(m, " "), err)
 	}
 	return nil
+}
+
+// LoadSQL grabs the sql
+func LoadSQL(m string, dir string, b bool) (string, error) {
+	//a := fmt.Sprintf("dbt run --select %s", m)
+
+	return `
+		SELECT *
+		FROM data-trustedwarehouse-p.commercial_da_reporting.rep_fct_bookings`, nil
+}
+
+func BqDryRun(q string, b bool) (string, error) {
+	a := fmt.Sprintf("bq query --nouse_legacy_sql --dry_run --nouse_cache \"%s\"", q)
+
+	LogVerbose(b, "Running: %s", a)
+
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	c := exec.Command(a)
+	if b {
+		c.Stdout = &out
+		c.Stderr = &stderr
+	}
+
+	err := c.Run()
+	if err != nil {
+		log.Fatalf("Could not dry run query: %v", err)
+	}
+
+	if b {
+		fmt.Print(out.String())
+	}
+
+	return out.String(), nil
 }
 
 var errFound = errors.New("found")
@@ -89,9 +139,7 @@ func FindFilepath(modelName string, dir string, subDir string, b bool) (string, 
 	var filePath string
 
 	dir = filepath.Join(dir, subDir)
-	if b {
-		fmt.Printf("Looking for model %s in %s\n", modelName, dir)
-	}
+	LogVerbose(b, "Looking for model %s in %s", modelName, dir)
 	modelFilename := modelName + ".sql"
 
 	walkErr := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -113,9 +161,7 @@ func FindFilepath(modelName string, dir string, subDir string, b bool) (string, 
 		return "", fmt.Errorf("model '%s' not found", modelName)
 	}
 
-	if b {
-		fmt.Printf("Found model %s at %s\n", modelName, filePath)
-	}
+	LogVerbose(b, "Found model %s at %s", modelName, filePath)
 
 	return filePath, nil
 }
