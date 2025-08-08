@@ -1,6 +1,6 @@
 # Dibbity - DBT Utility Tool
 
-Tool to take some of the edge of using dbt.
+Tool to take some of the edge off using dbt.
 
 Also I am trying to learn Go.
 
@@ -9,7 +9,6 @@ Also I am trying to learn Go.
 
 - Dry run DBT models
 - List and compile DBT models
-- BigQuery dry run support
 
 ### Basic Commands
 
