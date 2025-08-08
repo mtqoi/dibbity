@@ -21,7 +21,7 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 
 	isVerbose, _ := cmd.Flags().GetBool("verbose")
 	dbtDir := core.GetFolder(isVerbose)
-	fmt.Printf("Using dbt folder: %s\n", dbtDir) // TODO: remove
+	isCompile, _ := cmd.Flags().GetBool("compile")
 
 	//var err error
 
@@ -33,13 +33,29 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	selectedModels, _ := cmd.Flags().GetStringSlice("select")
 	selectedModels = append(selectedModels, args...)
 
-	fmt.Printf("Selected models: %v\n", selectedModels)
-
-	err := core.ListModels(selectedModels, dbtDir)
-	if err != nil {
-		log.Fatalf("Could not list models: %v", err)
+	if isVerbose {
+		fmt.Printf("Selected models: %v\n", selectedModels)
 	}
 
+	//err := core.ListModels(selectedModels, dbtDir)
+	//if err != nil {
+	//	log.Fatalf("Could not list models: %v", err)
+	//}
+
+	if isCompile {
+		err := core.CompileModel(selectedModels[0], dbtDir, isVerbose)
+		if err != nil {
+			log.Fatalf("Could not compile model: %v", err)
+		}
+	}
+
+	// TODO: ensure this can work for multiple models
+	_, err := core.FindFilepath(selectedModels[0], dbtDir, "target", isVerbose)
+	if err != nil {
+		log.Fatalf("Could not find model: %v", err)
+	}
+
+	fmt.Println("Done")
 }
 
 func init() {
@@ -50,7 +66,7 @@ func init() {
 		log.Fatalf("Could not mark --select flag as required: %v", err)
 	}
 
-	dryRunCmd.Flags().BoolP("verbose", "v", false, "Verbose output")
+	dryRunCmd.Flags().BoolP("compile", "c", false, "Compile new model")
 
 	// Here you will define your flags and configuration settings.
 
