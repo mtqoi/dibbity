@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// TODO: consider adding a Program type which will contain the flags to pass into dbt
+
 func LogVerbose(b bool, format string, a ...interface{}) {
 	if !b {
 		return
@@ -113,21 +115,17 @@ func LoadSQL(f string, b bool) (string, error) {
 
 // Q: is there a bq runner library already for Go?
 func BqDryRun(q string, b bool) (string, error) {
-	//a := fmt.Sprintf("bq query --nouse_legacy_sql --dry_run --nouse_cache \"%s\"", q)
 
 	var out bytes.Buffer
 	var stderr bytes.Buffer
-	//c := exec.Command("zsh", "-c", a)
 	c := exec.Command("bq", "query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", q)
-
-	//LogVerbose(b, "Running: %s", c.String())
 
 	c.Stdout = &out
 	c.Stderr = &stderr
 
 	err := c.Run()
 	if err != nil {
-		return "", fmt.Errorf("could not dry run query: %v. Stderr: %s", err, stderr.String())
+		return "", err
 	}
 
 	if b {

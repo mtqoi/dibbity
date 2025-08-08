@@ -17,11 +17,18 @@ var dryRunCmd = &cobra.Command{
 	Run:   dryRunRun,
 }
 
-var modelMap map[string]string
+type Model struct {
+	Name       string
+	Path       string
+	SQL        string
+	CostBytes  int
+	BQResponse string
+}
 
 func dryRunRun(cmd *cobra.Command, args []string) {
 	var err error
 
+	// TODO: refactor to bind to variable directly
 	isVerbose, err := cmd.Flags().GetBool("verbose")
 	if err != nil {
 		log.Fatalf("Error getting verbose flag: %v", err)
@@ -46,6 +53,7 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
 
 	// TODO: add defer flags
+	// compile the models if required
 	if isCompile {
 		err = core.CompileModel(selectedModels, dbtDir, isVerbose)
 		if err != nil {
@@ -53,29 +61,35 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	modelMap = make(map[string]string)
-	for _, model := range selectedModels {
-		fp, err := core.FindFilepath(model, dbtDir, "target", isVerbose)
+	// initialise empty list of models
+	var models []Model
+
+	// populate the fields
+	for _, modelName := range selectedModels {
+		fp, err := core.FindFilepath(modelName, dbtDir, "target", isVerbose)
 		if err != nil {
-			log.Fatalf("Error finding model %s: %v", model, err)
+			log.Fatalf("Error finding model %s: %v", modelName, err)
 		}
-		modelMap[model] = fp
+		sql, err := core.LoadSQL(fp, isVerbose)
+		if err != nil {
+			log.Fatalf("Error loading SQL for model %s: %v", modelName, err)
+		}
+		models = append(models, Model{Name: modelName, Path: fp, SQL: sql})
 	}
 
-	core.LogVerbose(isVerbose, "%v", modelMap)
+	core.LogVerbose(isVerbose, "Loaded %d models", len(models))
 
-	q, err := core.LoadSQL(modelMap[selectedModels[0]], isVerbose)
+	if len(models) == 0 {
+		log.Fatalln("No models selected or found.")
+	}
+
+	// TODO: add in control logic to do the dryrun + get the info back
+
+	models[0].BQResponse, err = core.BqDryRun(models[0].SQL, isVerbose)
 	if err != nil {
-		log.Fatalf("Error loading SQL: %v", err)
+		log.Fatalf("Error running dry run: %v", err)
 	}
 
-	//var bqout string
-	_, err = core.BqDryRun(q, isVerbose)
-	if err != nil {
-		log.Fatalf("Error in BQ dry run: %v", err)
-	}
-
-	core.LogVerbose(isVerbose, "Done")
 }
 
 func init() {
