@@ -5,6 +5,8 @@ package cmd
 
 import (
 	"dibbity/core"
+	"github.com/spf13/viper"
+
 	//"fmt"
 	"github.com/spf13/cobra"
 	"log"
@@ -25,46 +27,39 @@ type Model struct {
 	BQResponse string
 }
 
+var (
+	selectedModels   []string
+	shouldCompile    bool
+	shouldDefer      bool
+	shouldEmptyBuild bool
+)
+
 func dryRunRun(cmd *cobra.Command, args []string) {
 	var err error
 
-	// TODO: refactor to bind to variable directly
-	isVerbose, err := cmd.Flags().GetBool("verbose")
-	if err != nil {
-		log.Fatalf("Error getting verbose flag: %v", err)
-	}
+	isVerbose := viper.GetBool("verbose")
+	dbtDir := viper.GetString("dbt-dir")
 
-	dbtDir, err := core.GetFolder(isVerbose)
-	if err != nil {
-		log.Fatalf("Error getting dbt directory: %v", err)
-	}
-
-	isCompile, err := cmd.Flags().GetBool("compile")
-	if err != nil {
-		log.Fatalf("Error getting compile flag: %v", err)
-	}
-
-	selectedModels, err := cmd.Flags().GetStringSlice("select")
-	if err != nil {
-		log.Fatalf("Error getting selected models: %v", err)
-	}
 	selectedModels = append(selectedModels, args...)
 
 	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
 
-	// TODO: add defer flags
-	// compile the models if required
-	if isCompile {
-		err = core.CompileModel(selectedModels, dbtDir, isVerbose)
+	dbtOpts := core.DbtOptions{
+		Select:  selectedModels,
+		Empty:   shouldEmptyBuild,
+		Defer:   shouldDefer,
+		Compile: shouldCompile,
+	}
+
+	if dbtOpts.Compile {
+		err = core.CompileModel(dbtOpts, dbtDir, isVerbose)
 		if err != nil {
-			log.Fatalf("Error compiling model: %v", err)
+			log.Fatalf("Error compiling models: %v", err)
 		}
 	}
 
-	// initialise empty list of models
 	var models []Model
 
-	// populate the fields
 	for _, modelName := range selectedModels {
 		fp, err := core.FindFilepath(modelName, dbtDir, "target", isVerbose)
 		if err != nil {
@@ -95,12 +90,14 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 func init() {
 	rootCmd.AddCommand(dryRunCmd)
 
-	dryRunCmd.Flags().StringSliceP("select", "s", []string{}, "Select models to run")
+	dryRunCmd.Flags().StringSliceVarP(&selectedModels, "select", "s", []string{}, "Select models to run")
 	if err := dryRunCmd.MarkFlagRequired("select"); err != nil {
 		log.Fatalf("Error: could not mark --select flag as required: %v", err)
 	}
 
-	dryRunCmd.Flags().BoolP("compile", "c", false, "Compile new model")
+	dryRunCmd.Flags().BoolVarP(&shouldCompile, "compile", "c", false, "Compile new model")
+	dryRunCmd.Flags().BoolVarP(&shouldDefer, "defer", "d", false, "Use deferred build")
+	dryRunCmd.Flags().BoolVarP(&shouldEmptyBuild, "empty", "e", false, "Use empty build")
 
 	// Here you will define your flags and configuration settings.
 

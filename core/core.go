@@ -14,6 +14,38 @@ import (
 
 // TODO: consider adding a Program type which will contain the flags to pass into dbt
 
+type DbtOptions struct {
+	Command string   // the command to actually run
+	Select  []string // the models we want to run
+	Empty   bool
+	Defer   bool
+	Compile bool // do we want to first compile the models?
+}
+
+func (opts *DbtOptions) BuildArgs() []string {
+	args := []string{opts.Command}
+	if len(opts.Select) > 0 {
+		args = append(args, "--select")
+		args = append(args, opts.Select...)
+	}
+
+	if opts.Defer {
+		args = append(args, "--defer --state target_prod --favor-state")
+	}
+
+	if opts.Empty {
+		args = append(args, "--empty")
+	}
+
+	return args
+}
+
+type BqOptions struct {
+	Query string
+	// add in options for the return type
+	// TODO: also check the docs for other things to add
+}
+
 func LogVerbose(b bool, format string, a ...interface{}) {
 	if !b {
 		return
@@ -55,15 +87,18 @@ func ListDir(dir string, b bool) error {
 }
 
 // PoetryRun can run arbitrary commands in the directory path specified by the "dbt-dir" configuration key
-func PoetryRun(args string, dir string, b bool) (string, error) {
-	a := fmt.Sprintf("poetry run %s", args)
+func PoetryRun(program string, args []string, dir string, b bool) error {
+	cmdArgs := []string{"run", program}
+	cmdArgs = append(cmdArgs, args...)
 
-	LogVerbose(b, "Running: %s", a)
+	LogVerbose(b, "Running: poetry %s", strings.Join(cmdArgs, " "))
 
-	c := exec.Command("zsh", "-c", a)
+	//c := exec.Command("zsh", "-c", a)
+	c := exec.Command("poetry", cmdArgs...)
 
 	c.Dir = dir
 
+	// TODO: rethink how I want to capture the response here
 	if b {
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
@@ -71,30 +106,36 @@ func PoetryRun(args string, dir string, b bool) (string, error) {
 
 	err := c.Run()
 	if err != nil {
-		return "", fmt.Errorf("could not activate Poetry in %s: %w", dir, err)
+		return err
 	}
-	return a, nil
+	return nil
 }
 
 func ListModels(m []string, dir string, b bool) error {
 
-	a := fmt.Sprintf("dbt ls --select %s %s", strings.Join(m, " "), "--resource-type model")
-
-	_, err := PoetryRun(a, dir, b)
+	opts := DbtOptions{
+		Select:  m,
+		Command: "ls",
+	}
+	args := opts.BuildArgs()
+	args = append(args, "--resource-type model")
+	err := PoetryRun("dbt", args, dir, b)
 	if err != nil {
-		return fmt.Errorf("could not list models: %w", err)
+		return err
 	}
 
 	return nil
 }
 
-func CompileModel(m []string, dir string, b bool) error {
+// CompileModel compiles the dbt models set in DbtOptions.Select
+func CompileModel(opts DbtOptions, dir string, b bool) error {
 
-	a := fmt.Sprintf("dbt compile --select %s", strings.Join(m, " "))
+	opts.Command = "compile"
+	args := opts.BuildArgs()
 
-	_, err := PoetryRun(a, dir, b)
+	err := PoetryRun("dbt", args, dir, b)
 	if err != nil {
-		return fmt.Errorf("could not compile models %s: %w", strings.Join(m, " "), err)
+		return err
 	}
 	return nil
 }
