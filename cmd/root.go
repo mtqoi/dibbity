@@ -52,6 +52,10 @@ func init() {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose output")
+	err := viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+	if err != nil {
+		return
+	}
 }
 
 // initConfig reads in config file and ENV variables if set.

@@ -30,7 +30,7 @@ func (opts *DbtOptions) BuildArgs() []string {
 	}
 
 	if opts.Defer {
-		args = append(args, "--defer --state target_prod --favor-state")
+		args = append(args, []string{"--defer", "--state", "target_prod", "--favor-state"}...)
 	}
 
 	if opts.Empty {
@@ -40,10 +40,32 @@ func (opts *DbtOptions) BuildArgs() []string {
 	return args
 }
 
-type BqOptions struct {
-	Query string
+type BqRunner struct {
+	Query  string
+	Out    string
+	Stderr string
 	// add in options for the return type
 	// TODO: also check the docs for other things to add
+}
+
+func (bq *BqRunner) BqDryRun(b bool) (*BqRunner, error) {
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+
+	args := []string{"query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", bq.Query}
+	LogVerbose(b, "Running: bq %s", strings.Join(args, " "))
+
+	c := exec.Command("bq", args...)
+
+	c.Stdout = &out
+	c.Stderr = &stderr
+
+	err := c.Run()
+	if err != nil {
+		return &BqRunner{}, err
+	}
+
+	return bq, nil
 }
 
 func LogVerbose(b bool, format string, a ...interface{}) {
@@ -152,28 +174,6 @@ func LoadSQL(f string, b bool) (string, error) {
 	}
 
 	return string(q), nil
-}
-
-// Q: is there a bq runner library already for Go?
-func BqDryRun(q string, b bool) (string, error) {
-
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	c := exec.Command("bq", "query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", q)
-
-	c.Stdout = &out
-	c.Stderr = &stderr
-
-	err := c.Run()
-	if err != nil {
-		return "", err
-	}
-
-	if b {
-		fmt.Print(out.String())
-	}
-
-	return out.String(), nil
 }
 
 var errFound = errors.New("found")

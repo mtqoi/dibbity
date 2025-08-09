@@ -38,7 +38,10 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	var err error
 
 	isVerbose := viper.GetBool("verbose")
-	dbtDir := viper.GetString("dbt-dir")
+	dbtDir, err := core.GetFolder(isVerbose)
+	if err != nil {
+		log.Fatalf("Error getting dbt folder: %v", err)
+	}
 
 	selectedModels = append(selectedModels, args...)
 
@@ -80,7 +83,10 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 
 	// TODO: add in control logic to do the dryrun + get the info back
 
-	models[0].BQResponse, err = core.BqDryRun(models[0].SQL, isVerbose)
+	bqr := core.BqRunner{
+		Query: models[0].SQL,
+	}
+	_, err = bqr.BqDryRun(isVerbose)
 	if err != nil {
 		log.Fatalf("Error running dry run: %v", err)
 	}
@@ -96,7 +102,7 @@ func init() {
 	}
 
 	dryRunCmd.Flags().BoolVarP(&shouldCompile, "compile", "c", false, "Compile new model")
-	dryRunCmd.Flags().BoolVarP(&shouldDefer, "defer", "d", false, "Use deferred build")
+	dryRunCmd.Flags().BoolVarP(&shouldDefer, "defer", "d", true, "Use deferred build")
 	dryRunCmd.Flags().BoolVarP(&shouldEmptyBuild, "empty", "e", false, "Use empty build")
 
 	// Here you will define your flags and configuration settings.
