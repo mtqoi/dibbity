@@ -1,6 +1,6 @@
 # Dibbity - DBT Utility Tool
 
-Tool to take some of the edge of using dbt.
+Tool to take some of the edge off using dbt.
 
 Also I am trying to learn Go.
 
@@ -9,7 +9,6 @@ Also I am trying to learn Go.
 
 - Dry run DBT models
 - List and compile DBT models
-- BigQuery dry run support
 
 ### Basic Commands
 
@@ -37,5 +36,6 @@ Also I am trying to learn Go.
 - pull all data for model through locally (e.g. to populate a duckdb database)
 
 Long term:
-- better interactions with LookML e.g. get difference between `view.lkml` fields and dbt model fields
+- better interactions with LookML e.g. get difference between `view.lkml` fields and dbt model fields (need to finish my lookml parser first) 
 - syncing descriptions
+- just grab the filepath for the view that implements the dbt model (easy) 
