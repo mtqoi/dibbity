@@ -2,12 +2,14 @@ package core
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/spf13/viper"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,18 +43,48 @@ func (opts *DbtOptions) BuildArgs() []string {
 }
 
 type BqRunner struct {
-	Query  string
-	Out    string
-	Stderr string
-	// add in options for the return type
+	Query          string
+	Out            string
+	BytesProcessed int64
 	// TODO: also check the docs for other things to add
+	// TODO: also handle case where we can't run the query
+}
+
+type BqDryRunResponse struct {
+	TotalBytesProcessed int64 `json:"-"` // Not directly mapped from JSON
+}
+
+// custom json unmarshall;er
+func (r *BqDryRunResponse) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Statistics struct {
+			Query struct {
+				TotalBytesProcessed string `json:"totalBytesProcessed"`
+			} `json:"query"`
+		} `json:"statistics"`
+	}
+
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Convert string to int64
+	if raw.Statistics.Query.TotalBytesProcessed != "" {
+		var err error
+		r.TotalBytesProcessed, err = strconv.ParseInt(raw.Statistics.Query.TotalBytesProcessed, 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse TotalBytesProcessed: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (bq *BqRunner) BqDryRun(b bool) (*BqRunner, error) {
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 
-	args := []string{"query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", bq.Query}
+	args := []string{"query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", "--format=json", bq.Query}
 	LogVerbose(b, "Running: bq %s", strings.Join(args, " "))
 
 	c := exec.Command("bq", args...)
@@ -62,8 +94,17 @@ func (bq *BqRunner) BqDryRun(b bool) (*BqRunner, error) {
 
 	err := c.Run()
 	if err != nil {
-		return &BqRunner{}, err
+		return &BqRunner{}, fmt.Errorf("bq command failed with error: %w, stderr: %s", err, stderr.String())
 	}
+
+	bq.Out = out.String()
+	var stats BqDryRunResponse
+	if err := json.Unmarshal(out.Bytes(), &stats); err != nil {
+		return &BqRunner{}, fmt.Errorf("failed to unmarshal bq dry run response: %w", err)
+	}
+	bq.BytesProcessed = stats.TotalBytesProcessed
+
+	// TODO: need to add a check as to whether the code runs correctly
 
 	return bq, nil
 }
