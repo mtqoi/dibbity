@@ -14,10 +14,11 @@ Also I am trying to learn Go.
 
 
 ## TODO:
-- refactor to use cobra bindings
-- create options struct to pass to dbt & bq
-- handle bq output + calculate costs
-- pretty print output
+- [ ] refactor to use cobra bindings
+- [x] create options struct to pass to dbt & bq
+- [x] handle bq output + calculate costs
+- [x] pretty print output
+- [ ] use dbt `--select` syntax
 
 ## Other ideas for commands:
 - return the file for a specific model (useful for piping)
