@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"log"
+	"strings"
 )
 
 var dryRunCmd = &cobra.Command{
@@ -48,6 +49,11 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 
 	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
 
+	// Print fancy header
+	fmt.Println()
+	core.PrintBox("BigQuery Dry Run", fmt.Sprintf("Models: %s", strings.Join(selectedModels, ", ")), core.BoxRounded, core.BrightCyan)
+	fmt.Println()
+
 	dbtOpts := core.DbtOptions{
 		Select:  selectedModels,
 		Empty:   shouldEmptyBuild,
@@ -85,8 +91,10 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	// TODO: add in control logic to do the dryrun + get the info back
 
 	for i := range models {
-
-		fmt.Println("Running model: ", models[i].Name) // TODO: make pretty
+		// Create a fancy model header
+		modelHeader := fmt.Sprintf("Model: %s", models[i].Name)
+		core.ColorPrintln(core.Bold+core.BrightBlue, modelHeader)
+		core.ColorPrintln(core.Dim+core.BrightBlue, strings.Repeat("─", len(modelHeader)))
 
 		models[i].BQRunner = core.BqRunner{
 			Query: models[i].SQL,
@@ -95,55 +103,55 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 
 		_, err := models[i].BQRunner.BqDryRun(isVerbose)
 		if err != nil {
-			log.Fatalf("Error running dry run: %v", err) // TODO: decide whether I want to be able to recover from this
+			log.Fatalf("Error running dry run: %v", err)
 		}
 
-		//model.BQRunner = *bqr
 		models[i].CostBytes = int(models[i].BQRunner.BytesProcessed)
 
-		// TODO: make pretty
 		if !models[i].BQRunner.Ok {
-			fmt.Printf("Dry run failed for model %s: %s\n", models[i].Name, models[i].BQRunner.RespError)
+			core.ColorPrint(core.Bold+core.Red, "✗ ")
+			core.ColorPrintln(core.Bold+core.Red, "Failed")
+			core.PrintBox("Error", models[i].BQRunner.RespError, core.BoxRounded, core.Red)
 		} else {
-			fmt.Printf("Dry run successful for model %s, total cost: %s\n",
-				models[i].Name, FormatCost(models[i].CostBytes))
+			core.ColorPrint(core.Bold+core.Green, "✓ ")
+			core.ColorPrint(core.Bold, "Success - Data to process: ")
+			fmt.Println(FormatCost(models[i].CostBytes))
+		}
+		fmt.Println() // Add spacing between models
+	}
+
+	// Calculate and print summary
+	var totalCost int64
+	var successCount, failCount int
+
+	for _, model := range models {
+		totalCost += int64(model.CostBytes)
+		if model.BQRunner.Ok {
+			successCount++
+		} else {
+			failCount++
 		}
 	}
 
-	var totalCost int
-	var formattedTotalCost string
+	// Print summary in a fancy box
+	summary := fmt.Sprintf(
+		"Models Processed: %d\n"+
+			"Successful: %s%d%s\n"+
+			"Failed: %s%d%s\n"+
+			"Total Data to Process: %s",
+		len(models),
+		core.Green, successCount, core.Reset,
+		core.Red, failCount, core.Reset,
+		core.FormatBytes(totalCost),
+	)
 
-	for _, model := range models {
-		totalCost += model.CostBytes
-	}
-
-	formattedTotalCost = FormatCost(totalCost)
-
-	fmt.Println("\n==== Dry Run Summary ====")
-	fmt.Printf("total models procesed: %d\n", len(models))
-	fmt.Printf("Total data processed: %s\n", formattedTotalCost)
+	core.PrintBox("Dry Run Summary", summary, core.BoxDouble, core.BrightMagenta)
 }
 
 // FormatCost calculates the total cost in bytes of all models
 // and returns a formatted string with appropriate units (B, MB, GB, TB)
-func FormatCost(m int) string {
-
-	// format with the appropriate unit
-	var formattedCost string
-	switch {
-	case m < 1024:
-		formattedCost = fmt.Sprintf("%d B", m)
-	case m < 1024*1024:
-		formattedCost = fmt.Sprintf("%.2f KB", float64(m)/1024)
-	case m < 1024*1024*1024:
-		formattedCost = fmt.Sprintf("%.2f MB", float64(m)/(1024*1024))
-	case m < 1024*1024*1024*1024:
-		formattedCost = fmt.Sprintf("%.2f GB", float64(m)/(1024*1024*1024))
-	case m < 1024*1024*1024*1024*1024:
-		formattedCost = fmt.Sprintf("%.2f TB", float64(m)/(1024*1024*1024*1024))
-	}
-
-	return formattedCost
+func FormatCost(bytes int) string {
+	return core.FormatBytes(int64(bytes))
 }
 
 func init() {
