@@ -7,7 +7,7 @@ import (
 	"dibbity/core"
 	"github.com/spf13/viper"
 
-	//"fmt"
+	"fmt"
 	"github.com/spf13/cobra"
 	"log"
 )
@@ -20,11 +20,11 @@ var dryRunCmd = &cobra.Command{
 }
 
 type Model struct {
-	Name       string
-	Path       string
-	SQL        string
-	CostBytes  int
-	BQResponse string
+	Name      string
+	Path      string
+	SQL       string
+	CostBytes int
+	BQRunner  core.BqRunner
 }
 
 var (
@@ -43,6 +43,7 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 		log.Fatalf("Error getting dbt folder: %v", err)
 	}
 
+	// TODO: I need use `dbt ls` to expand the models given
 	selectedModels = append(selectedModels, args...)
 
 	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
@@ -83,14 +84,66 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 
 	// TODO: add in control logic to do the dryrun + get the info back
 
-	bqr := core.BqRunner{
-		Query: models[0].SQL,
-	}
-	_, err = bqr.BqDryRun(isVerbose)
-	if err != nil {
-		log.Fatalf("Error running dry run: %v", err)
+	for i := range models {
+
+		fmt.Println("Running model: ", models[i].Name) // TODO: make pretty
+
+		models[i].BQRunner = core.BqRunner{
+			Query: models[i].SQL,
+			Ok:    true,
+		}
+
+		_, err := models[i].BQRunner.BqDryRun(isVerbose)
+		if err != nil {
+			log.Fatalf("Error running dry run: %v", err) // TODO: decide whether I want to be able to recover from this
+		}
+
+		//model.BQRunner = *bqr
+		models[i].CostBytes = int(models[i].BQRunner.BytesProcessed)
+
+		// TODO: make pretty
+		if !models[i].BQRunner.Ok {
+			fmt.Printf("Dry run failed for model %s: %s\n", models[i].Name, models[i].BQRunner.RespError)
+		} else {
+			fmt.Printf("Dry run successful for model %s, total cost: %s\n",
+				models[i].Name, FormatCost(models[i].CostBytes))
+		}
 	}
 
+	var totalCost int
+	var formattedTotalCost string
+
+	for _, model := range models {
+		totalCost += model.CostBytes
+	}
+
+	formattedTotalCost = FormatCost(totalCost)
+
+	fmt.Println("\n==== Dry Run Summary ====")
+	fmt.Printf("total models procesed: %d\n", len(models))
+	fmt.Printf("Total data processed: %s\n", formattedTotalCost)
+}
+
+// FormatCost calculates the total cost in bytes of all models
+// and returns a formatted string with appropriate units (B, MB, GB, TB)
+func FormatCost(m int) string {
+
+	// format with the appropriate unit
+	var formattedCost string
+	switch {
+	case m < 1024:
+		formattedCost = fmt.Sprintf("%d B", m)
+	case m < 1024*1024:
+		formattedCost = fmt.Sprintf("%.2f KB", float64(m)/1024)
+	case m < 1024*1024*1024:
+		formattedCost = fmt.Sprintf("%.2f MB", float64(m)/(1024*1024))
+	case m < 1024*1024*1024*1024:
+		formattedCost = fmt.Sprintf("%.2f GB", float64(m)/(1024*1024*1024))
+	case m < 1024*1024*1024*1024*1024:
+		formattedCost = fmt.Sprintf("%.2f TB", float64(m)/(1024*1024*1024*1024))
+	}
+
+	return formattedCost
 }
 
 func init() {

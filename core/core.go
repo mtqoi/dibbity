@@ -46,8 +46,9 @@ type BqRunner struct {
 	Query          string
 	Out            string
 	BytesProcessed int64
+	Ok             bool
+	RespError      string
 	// TODO: also check the docs for other things to add
-	// TODO: also handle case where we can't run the query
 }
 
 type BqDryRunResponse struct {
@@ -84,27 +85,30 @@ func (bq *BqRunner) BqDryRun(b bool) (*BqRunner, error) {
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 
-	args := []string{"query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", "--format=json", bq.Query}
+	args := []string{"query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", "--format=json", "-q"}
 	LogVerbose(b, "Running: bq %s", strings.Join(args, " "))
 
 	c := exec.Command("bq", args...)
 
+	c.Stdin = strings.NewReader(bq.Query) // piping in with stdin to ensure that queries beginning with `--` comment are interpreted as single arguments, not as an extra flag
 	c.Stdout = &out
 	c.Stderr = &stderr
 
 	err := c.Run()
 	if err != nil {
-		return &BqRunner{}, fmt.Errorf("bq command failed with error: %w, stderr: %s", err, stderr.String())
+		bq.Ok = false
+		bq.RespError = out.String()
+		return bq, nil // return without error so the caller can check bq.Ok
 	}
 
 	bq.Out = out.String()
+	bq.Ok = true
+
 	var stats BqDryRunResponse
 	if err := json.Unmarshal(out.Bytes(), &stats); err != nil {
 		return &BqRunner{}, fmt.Errorf("failed to unmarshal bq dry run response: %w", err)
 	}
 	bq.BytesProcessed = stats.TotalBytesProcessed
-
-	// TODO: need to add a check as to whether the code runs correctly
 
 	return bq, nil
 }
