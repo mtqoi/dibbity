@@ -55,7 +55,8 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	selectedModels = append(selectedModels, args...)
 	// Print fancy header
 	fmt.Println()
-	core.PrintBox("BigQuery Dry Run", fmt.Sprintf("Dry Running %d Models: %s", len(selectedModels), strings.Join(selectedModels, ", ")), core.BoxRounded, core.BrightCyan)
+	// TODO: ensure that the length of models is using the expanded number
+	core.PrintBox(fmt.Sprintf("BigQuery Dry Run: %d models", len(selectedModels)), fmt.Sprintf("Models: %s", strings.Join(selectedModels, ", ")), core.BoxRounded, core.BrightCyan)
 	fmt.Println()
 	selectedModels, err = core.ListModels(selectedModels, dbtDir, isVerbose)
 	if err != nil {
@@ -66,10 +67,22 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 
 	// TODO: add some pretty printing for when the model is compiling
 	if dbtOpts.Compile {
+		core.ColorPrint(core.Bold+core.BrightBlue, "⚙️  ")
+		core.ColorPrintln(core.Bold+core.BrightBlue, "Compiling DBT models...")
+
 		err = core.CompileModel(dbtOpts, dbtDir, isVerbose)
 		if err != nil {
+			// Show error in a styled box if compilation fails
+			core.ColorPrintln(core.Bold+core.BrightRed, "❌ Compilation failed!")
+			core.PrintBox("Compilation Error", fmt.Sprintf("%v", err), core.BoxRounded, core.Red)
 			log.Fatalf("Error compiling models: %v", err)
+		} else {
+			// Show success message
+			core.ColorPrint(core.Bold+core.Green, "✓ ")
+			core.ColorPrintln(core.Bold+core.Green, "Compilation completed successfully!")
+			fmt.Println() // Add a blank line for spacing
 		}
+
 	}
 
 	var models []Model
@@ -165,7 +178,7 @@ func init() {
 	}
 
 	dryRunCmd.Flags().BoolVarP(&shouldCompile, "compile", "c", false, "Compile new model")
-	dryRunCmd.Flags().BoolVarP(&shouldDefer, "defer", "d", true, "Use deferred build")
+	dryRunCmd.Flags().BoolVarP(&shouldDefer, "defer", "d", false, "Use deferred build")
 	dryRunCmd.Flags().BoolVarP(&shouldEmptyBuild, "empty", "e", false, "Use empty build")
 
 	// Here you will define your flags and configuration settings.
