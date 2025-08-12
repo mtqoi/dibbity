@@ -158,7 +158,7 @@ type BqDryRunResponse struct {
 	TotalBytesProcessed int64 `json:"-"` // Not directly mapped from JSON
 }
 
-// custom json unmarshall;er
+// UnmarshalJSON is a custom json unmarshaller
 func (r *BqDryRunResponse) UnmarshalJSON(data []byte) error {
 	var raw struct {
 		Statistics struct {
@@ -188,7 +188,7 @@ func (bq *BqRunner) BqDryRun(b bool) (*BqRunner, error) {
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 
-	args := []string{"query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", "--format=json", "-q"}
+	args := []string{"query", "--nouse_legacy_sql", "--dry_run", "--nouse_cache", "--format=json"}
 
 	// Print a fancy command execution message
 	if b {
@@ -291,7 +291,7 @@ func ListDir(dir string, b bool) error {
 }
 
 // PoetryRun can run arbitrary commands in the directory path specified by the "dbt-dir" configuration key
-func PoetryRun(program string, args []string, dir string, b bool) error {
+func PoetryRun(program string, args []string, dir string, b bool) (string, error) {
 	cmdArgs := []string{"run", program}
 	cmdArgs = append(cmdArgs, args...)
 
@@ -302,33 +302,75 @@ func PoetryRun(program string, args []string, dir string, b bool) error {
 
 	c.Dir = dir
 
+	var outBuf = bytes.Buffer{}
+	var errBuf = bytes.Buffer{}
+
 	// TODO: rethink how I want to capture the response here
 	if b {
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
 	}
+	c.Stdout = &outBuf
+	c.Stderr = &errBuf
 
 	err := c.Run()
 	if err != nil {
-		return err
+		return errBuf.String(), err
 	}
-	return nil
+	return outBuf.String(), nil
 }
 
-func ListModels(m []string, dir string, b bool) error {
+func unmarshalNames(s string) ([]string, error) {
+	// Split the input string by newlines
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+
+	names := make([]string, 0, len(lines))
+
+	// Process each line as a separate JSON object
+	for _, line := range lines {
+		// Skip empty lines
+		if len(strings.TrimSpace(line)) == 0 {
+			continue
+		}
+
+		// Define a struct for the JSON object
+		var item struct {
+			Name string `json:"name"`
+		}
+
+		// Unmarshal the JSON object
+		if err := json.Unmarshal([]byte(line), &item); err != nil {
+			return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
+		}
+
+		// Add the name to the slice
+		names = append(names, item.Name)
+	}
+
+	return names, nil
+}
+
+func ListModels(m []string, dir string, b bool) ([]string, error) {
 
 	opts := DbtOptions{
-		Select:  m,
 		Command: "ls",
-	}
-	args := opts.BuildArgs()
-	args = append(args, "--resource-type model")
-	err := PoetryRun("dbt", args, dir, b)
-	if err != nil {
-		return err
+		Select:  m,
 	}
 
-	return nil
+	args := opts.BuildArgs()
+
+	args = append(args, "--resource-type", "model", "--output", "json", "--output-keys", "name", "--quiet")
+	s, err := PoetryRun("dbt", args, dir, b)
+
+	if err != nil {
+		return nil, err
+	}
+
+	names, err := unmarshalNames(s)
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
 }
 
 // CompileModel compiles the dbt models set in DbtOptions.Select
@@ -337,7 +379,7 @@ func CompileModel(opts DbtOptions, dir string, b bool) error {
 	opts.Command = "compile"
 	args := opts.BuildArgs()
 
-	err := PoetryRun("dbt", args, dir, b)
+	_, err := PoetryRun("dbt", args, dir, b)
 	if err != nil {
 		return err
 	}

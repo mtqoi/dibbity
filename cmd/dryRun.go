@@ -35,24 +35,9 @@ var (
 	shouldEmptyBuild bool
 )
 
+// TODO: I am sure I should refactor this and split out the functionality
 func dryRunRun(cmd *cobra.Command, args []string) {
 	var err error
-
-	isVerbose := viper.GetBool("verbose")
-	dbtDir, err := core.GetFolder(isVerbose)
-	if err != nil {
-		log.Fatalf("Error getting dbt folder: %v", err)
-	}
-
-	// TODO: I need use `dbt ls` to expand the models given
-	selectedModels = append(selectedModels, args...)
-
-	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
-
-	// Print fancy header
-	fmt.Println()
-	core.PrintBox("BigQuery Dry Run", fmt.Sprintf("Models: %s", strings.Join(selectedModels, ", ")), core.BoxRounded, core.BrightCyan)
-	fmt.Println()
 
 	dbtOpts := core.DbtOptions{
 		Select:  selectedModels,
@@ -61,6 +46,25 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 		Compile: shouldCompile,
 	}
 
+	isVerbose := viper.GetBool("verbose")
+	dbtDir, err := core.GetFolder(isVerbose)
+	if err != nil {
+		log.Fatalf("Error getting dbt folder: %v", err)
+	}
+
+	selectedModels = append(selectedModels, args...)
+	// Print fancy header
+	fmt.Println()
+	core.PrintBox("BigQuery Dry Run", fmt.Sprintf("Dry Running %d Models: %s", len(selectedModels), strings.Join(selectedModels, ", ")), core.BoxRounded, core.BrightCyan)
+	fmt.Println()
+	selectedModels, err = core.ListModels(selectedModels, dbtDir, isVerbose)
+	if err != nil {
+		log.Fatalf("error running dbt ls: %v", err)
+	}
+
+	core.LogVerbose(isVerbose, "Selected models: %v", selectedModels)
+
+	// TODO: add some pretty printing for when the model is compiling
 	if dbtOpts.Compile {
 		err = core.CompileModel(dbtOpts, dbtDir, isVerbose)
 		if err != nil {
@@ -87,8 +91,6 @@ func dryRunRun(cmd *cobra.Command, args []string) {
 	if len(models) == 0 {
 		log.Fatalln("No models selected or found.")
 	}
-
-	// TODO: add in control logic to do the dryrun + get the info back
 
 	for i := range models {
 		// Create a fancy model header
