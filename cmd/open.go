@@ -33,8 +33,6 @@ type bqUrlBuilder struct {
 	tableName   string
 }
 
-var selectedModel string
-
 func openCmdRun(cmd *cobra.Command, args []string) {
 	// TODO: add some verbose printing
 	isVerbose := viper.GetBool("verbose")
@@ -43,6 +41,17 @@ func openCmdRun(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatalf("Error getting dbt folder: %v", err)
 	}
+
+	selectedModels = append(selectedModels, args...)
+	if len(selectedModels) == 0 {
+		log.Fatalln("No models selected.")
+	}
+
+	if len(selectedModels) > 1 {
+		log.Fatalln("Only one model can be opened at a time.")
+	}
+
+	selectedModel := selectedModels[0]
 
 	fp, err := core.FindFilepath(selectedModel, dbtDir, "models", isVerbose)
 	if err != nil {
@@ -123,7 +132,7 @@ func openBrowser(url string) error {
 func init() {
 	rootCmd.AddCommand(openCmd)
 
-	openCmd.Flags().StringVarP(&selectedModel, "select", "s", "", "Select model to open")
+	openCmd.Flags().StringSliceVarP(&selectedModels, "select", "s", []string{}, "Select model to open")
 	if err := dryRunCmd.MarkFlagRequired("select"); err != nil {
 		log.Fatalf("Error: could not mark --select flag as required: %v", err)
 	}
